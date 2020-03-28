@@ -7,3 +7,6 @@
 
 # Project specifics
 *.pem
+.keys/
+*.srl
+

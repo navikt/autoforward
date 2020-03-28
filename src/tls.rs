@@ -15,8 +15,8 @@ use std::task::{Poll, Context};
 
 pub async fn tls_acceptor(tcp: &'_ mut TcpListener) -> Result<HyperAcceptor<'_>, io::Error> {
     let tls_cfg = {
-        let certs = load_certs("cert.pem")?;
-        let key = load_private_key("key.pem")?;
+        let certs = load_certs(".keys/server.crt")?;
+        let key = load_private_key(".keys/server.key")?;
 
         let mut cfg = rustls::ServerConfig::new(rustls::NoClientAuth::new());
 
