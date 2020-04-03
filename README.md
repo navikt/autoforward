@@ -8,6 +8,7 @@ via kubectl
 * [ ] Bedre feilhåndtering, gi beskjed om problemer med NAVtunnel
 * [ ] Støtte for namespaces
 * [ ] Unngå duplikater i /etc/hosts
+* [ ] Implementere en snillere måte å avslutte en prosess enn SIGKILL 
 * [ ] Sjekke mulighet for å binde port 443 og skrive til /etc/hosts som egen prosess
 * [ ] Sjekke mulighet for å prompte for passord kun for binding av port og skriving til /etc/hosts
 * [ ] Sjekke mulighet til å gi fra seg root når det ikke trengs
@@ -51,8 +52,6 @@ som normalt.
 ./generate_keys.sh
 ```
 
-## Hvordan fungerer den?
-
 ### Trust i Chrome under macOS
 Chrome har ingen måte å godkjenne selv-signerte sertifikater on-the-go. For å kunne
 benytte proxyen i Chrome må man derfor legge til server.crt i keychain access. Når
@@ -62,3 +61,12 @@ matche preprod domener.
 * I keychain acess finn sertifikatet med label nais.io
 * Høyreklikk på sertifikatet og velg get info
 * Under trust kan man sette Secure Socket Layer til Always Trust
+
+## Hvordan fungerer den?
+Autoforward henter ut alle naiserator apper ved å kjøre `kubectl get applications`
+for så å bruke output til å bygge seg opp en liste av app-navn med ingresser. Den
+setter så opp en reverse-proxy som inspecter Host headeren og finner ut om noen av
+appene har en ingress som matcher denne. Om den finner en match bruker den kubectl
+til å port-forwarde til denne appen og sende trafikken videre. Autoforward har også
+en watchdog som kjører i bakgrunnen og oppdaterer hvilke port-forwards som er i ok
+form ved å ved gjevne mellomrom kjøre et http kall mot liveness sjekken til appen. 
