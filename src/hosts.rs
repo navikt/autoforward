@@ -1,5 +1,5 @@
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str;
 use std::io::{Write, Read};
 use std::fs::{File, OpenOptions};
@@ -16,15 +16,30 @@ const LINE_SEPARATOR: &'static [u8] = b"\n";
 #[cfg(windows)]
 const LINE_SEPARATOR: &'static [u8] = b"\r\n";
 
+#[test]
+fn update_hosts_does_not_replace() {
+    let hosts = vec!["reddit.com".to_owned()];
+    let mut target_hosts = tempfile::NamedTempFile::new().unwrap();
+    std::fs::copy(Path::new("testdata/hosts"), &target_hosts.path()).unwrap();
+    update_hosts_file(&target_hosts.path(), &hosts).unwrap();
+    let original = std::fs::read_to_string(&target_hosts).unwrap();
+
+    update_hosts_file(&target_hosts.path(), &hosts).unwrap();
+    update_hosts_file(&target_hosts.path(), &hosts).unwrap();
+
+    let updated = std::fs::read_to_string(&target_hosts).unwrap();
+
+    assert_eq!(original, updated);
+}
+
 pub fn update_hosts_file(path: &Path, hosts: &Vec<String>) -> Result<(), io::Error> {
-    let mut input = OpenOptions::new()
-        .read(true)
+    let input_bytes = std::fs::read(path)?;
+
+    let mut output = OpenOptions::new()
         .write(true)
         .open(path)?;
-    let mut input_bytes = Vec::new();
-    input.read_to_end(&mut input_bytes)?;
     let result = insert_or_replace_entries(&input_bytes, &generate_host_entries(hosts));
-    input.write_all(&result)?;
+    output.write_all(&result)?;
     Ok(())
 }
 

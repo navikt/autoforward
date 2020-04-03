@@ -7,6 +7,8 @@ extern crate rustls;
 extern crate serde_json;
 extern crate tokio;
 extern crate tokio_rustls;
+#[cfg(test)]
+extern crate tempfile;
 
 use std::convert::Infallible;
 use std::str::FromStr;
