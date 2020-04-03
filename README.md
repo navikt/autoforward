@@ -1,6 +1,7 @@
 # 🦀🦀🦀 Autoforward 🦀🦀🦀
 En applikasjon som automagisk router ingresser i dev-fss til Kubernetes clusteret
-via kubectl
+via kubectl. Autoforward gjør det mulig å sømløst nå dine favoritt nais preprod
+apper rett fra egen laptop(!).
 
 ## Gjenstående
 * [ ] CLI parser for konfigurering av oppstart
