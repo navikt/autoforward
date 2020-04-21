@@ -2,6 +2,7 @@ use std::io;
 use std::process::Stdio;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
+use std::task::Poll;
 
 use hyper::{Client, Uri};
 use hyper::client::HttpConnector;
@@ -9,8 +10,11 @@ use regex::Regex;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
+use pin_utils::pin_mut;
 
 use super::kubernetes::{ApplicationResource, KubernetesResponse};
+use nix::unistd::Pid;
 
 #[derive(PartialEq, Eq)]
 struct ApplicationDescriptor {
@@ -88,9 +92,29 @@ impl PortforwardDescriptor {
     async fn close(mut self) {
         println!("Closing port-forward for {:?}", self.hosts);
 
-        self.port_forward_command.kill().unwrap();
-        self.port_forward_command.wait_with_output().await.unwrap();
+        PortforwardDescriptor::kill(self.port_forward_command).await;
         self.stdout.await.unwrap();
+    }
+
+    #[cfg(unix)]
+    async fn kill(mut process: Child) {
+        let process_id = process.id();
+        let output = process.wait_with_output();
+        pin_mut!(output);
+        nix::sys::signal::kill(Pid::from_raw(process_id as _), nix::sys::signal::SIGINT);
+        if let Err(_) = timeout(Duration::from_secs(3), &mut output).await {
+            println!("Failed to sigint kubectl, killing");
+            nix::sys::signal::kill(Pid::from_raw(process_id as _), nix::sys::signal::SIGKILL);
+
+            output.await.unwrap();
+        }
+        println!("Closed port-forward.");
+    }
+
+    #[cfg(not(unix))]
+    async fn kill(mut process: Child) {
+        process.kill().unwrap();
+        process.wait_with_output().await.unwrap();
     }
 
     async fn check_selftest(&self) -> bool {

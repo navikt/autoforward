@@ -9,6 +9,7 @@ extern crate tokio;
 extern crate tokio_rustls;
 #[cfg(test)]
 extern crate tempfile;
+extern crate pin_utils;
 
 use std::convert::Infallible;
 use std::str::FromStr;
