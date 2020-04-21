@@ -8,7 +8,7 @@ apper rett fra egen laptop(!).
 * [ ] Konfigurasjonsfil
 * [ ] Bedre feilhåndtering, gi beskjed om problemer med NAVtunnel
 * [ ] Støtte for namespaces
-* [ ] Unngå duplikater i /etc/hosts
+* [x] Unngå duplikater i /etc/hosts
 * [ ] Implementere en snillere måte å avslutte en prosess enn SIGKILL 
 * [ ] Sjekke mulighet for å binde port 443 og skrive til /etc/hosts som egen prosess
 * [ ] Sjekke mulighet for å prompte for passord kun for binding av port og skriving til /etc/hosts

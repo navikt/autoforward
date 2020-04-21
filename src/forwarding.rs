@@ -179,14 +179,17 @@ impl State {
 
     pub fn hostnames(&self) -> Vec<String> {
         let regex = Regex::new(r"https?://(.[^/]+)(:?/.*)?").unwrap();
-        (&self.hosts)
+        let mut hosts: Vec<String> = (&self.hosts)
             .into_iter()
             .flat_map(|v| (&v.ingresses))
             .map(|ingress| {
                 let captures = regex.captures(ingress.as_str()).unwrap();
                 captures[1].to_owned()
             })
-            .collect()
+            .collect();
+        hosts.sort();
+        hosts.dedup();
+        hosts
     }
 
     pub async fn tick(&mut self) {

@@ -37,6 +37,7 @@ pub fn update_hosts_file(path: &Path, hosts: &Vec<String>) -> Result<(), io::Err
 
     let mut output = OpenOptions::new()
         .write(true)
+        .truncate(true)
         .open(path)?;
     let result = insert_or_replace_entries(&input_bytes, &generate_host_entries(hosts));
     output.write_all(&result)?;
