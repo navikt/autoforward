@@ -1,20 +1,56 @@
+use std::error::Error;
+use std::fmt;
 use std::io;
 use std::process::Stdio;
 use std::str::FromStr;
-use std::time::{Duration, SystemTime};
 use std::task::Poll;
+use std::time::{Duration, SystemTime};
 
 use hyper::{Client, Uri};
 use hyper::client::HttpConnector;
+use nix::unistd::Pid;
+use pin_utils::pin_mut;
 use regex::Regex;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::{io::{AsyncBufReadExt, BufReader}};
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use pin_utils::pin_mut;
 
 use super::kubernetes::{ApplicationResource, KubernetesResponse};
-use nix::unistd::Pid;
+
+#[derive(Debug)]
+pub struct ForwardError {
+    message: &'static str,
+    original: io::Error,
+}
+
+impl fmt::Display for ForwardError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for ForwardError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.original)
+    }
+}
+
+trait ToForwardError<A> {
+    fn context(self, context: &'static str) -> Result<A, ForwardError>;
+}
+
+impl<A> ToForwardError<A> for Result<A, io::Error> {
+    fn context(self, context: &'static str) -> Result<A, ForwardError> {
+        match self {
+            Ok(v) => Ok(v),
+            Err(e) => Err(ForwardError {
+                message: context,
+                original: e,
+            }),
+        }
+    }
+}
 
 #[derive(PartialEq, Eq)]
 struct ApplicationDescriptor {
@@ -181,12 +217,19 @@ impl State {
         SystemTime::now() + Duration::from_secs(120)
     }
 
-    pub async fn new() -> State {
+    pub async fn new() -> Result<State, ForwardError> {
         let cmd = Command::new("kubectl")
             .args(&["--context", "dev-fss", "get", "application", "-o", "json"])
             .output()
             .await
-            .unwrap();
+            .context("Failed to execute kubectl get application")?;
+        if !cmd.status.success() {
+            let input = String::from_utf8(cmd.stderr).unwrap();
+            return Err(ForwardError {
+                message: "Failed to execute kubectl get application, got invalid exit code. Is navtunnel running?",
+                original: io::Error::new(io::ErrorKind::Other, input)
+            })
+        }
         let resource = serde_json::from_slice::<KubernetesResponse>(&cmd.stdout)
             .unwrap();
         let descriptors: Vec<ApplicationDescriptor> = resource.items
@@ -194,11 +237,11 @@ impl State {
             .filter(|application| application.spec.ingresses.is_some())
             .map(|application| application.into())
             .collect();
-        State {
+        Ok(State {
             next_update: State::next_update(),
             hosts: descriptors,
             port_forwards: vec![],
-        }
+        })
     }
 
     pub fn hostnames(&self) -> Vec<String> {
@@ -232,7 +275,7 @@ impl State {
         self.port_forwards = new_portforwards;
     }
 
-    pub async fn fetch_address(&mut self, host: &String, path: &str) -> Option<Portforward> {
+    pub async fn fetch_address(&mut self, host: &String, path: &str) -> Result<Option<Portforward>, ForwardError> {
         let info = (&self.hosts).into_iter()
             .filter_map(|desc| (desc.best_ingress(host, path).map(|v| (v, desc))))
             .max_by(|(a, _), (b, _)| a.len().cmp(&b.len()));
@@ -240,18 +283,20 @@ impl State {
         let (ingress, app) = if let Some(info) = info {
             info
         } else {
-            return None;
+            return Ok(None);
         };
         let mut desc = (&mut self.port_forwards).into_iter()
             .find(|v| v.contains_ingress(&ingress));
         if let Some(desc) = &mut desc {
             desc.update_ttl();
-            Some((&desc.portforward).clone())
+            Ok(Some((&desc.portforward).clone()))
         } else {
-            let portforward_desc: PortforwardDescriptor = PortforwardDescriptor::from_app(&app).await.unwrap();
+            let portforward_desc: PortforwardDescriptor = PortforwardDescriptor::from_app(&app)
+                .await
+                .context("Could not open port-forward. Are you still connected to navtunnel?")?;
             let portforward = portforward_desc.portforward.clone();
             self.port_forwards.push(portforward_desc);
-            Some(portforward)
+            Ok(Some(portforward))
         }
     }
 }

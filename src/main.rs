@@ -2,15 +2,16 @@ extern crate futures_util;
 extern crate hyper;
 #[cfg(unix)]
 extern crate nix;
+extern crate pin_utils;
 extern crate regex;
 extern crate rustls;
 extern crate serde_json;
-extern crate tokio;
-extern crate tokio_rustls;
 #[cfg(test)]
 extern crate tempfile;
-extern crate pin_utils;
+extern crate tokio;
+extern crate tokio_rustls;
 
+use std::{io, io::Write};
 use std::convert::Infallible;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
 use forwarding::State;
+use crate::forwarding::ForwardError;
 
 mod kubernetes;
 mod tls;
@@ -43,13 +45,13 @@ fn update_hosts_on_root(state: &State) {
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     #[cfg(unix)]
-    let mut tcp = if nix::unistd::getuid().is_root() {
+        let mut tcp = if nix::unistd::getuid().is_root() {
         TcpListener::bind(&"127.0.0.1:443").await?
     } else {
         TcpListener::bind(&"127.0.0.1:8443").await?
     };
     let state = {
-        let state = State::new().await;
+        let state = State::new().await?;
         #[cfg(unix)]
         update_hosts_on_root(&state);
 
@@ -78,11 +80,11 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let server = Server::builder(tls::tls_acceptor(&mut tcp).await?)
         .serve(service_fun);
 
-    server.await.unwrap();
+    server.await?;
     Ok(())
 }
 
-async fn handle_req(mut req: Request<Body>, state: Arc<Mutex<State>>) -> Result<Response<Body>, Infallible> {
+async fn handle_req(mut req: Request<Body>, state: Arc<Mutex<State>>) -> Result<Response<Body>, ForwardError> {
     let client = Client::new();
     let request_host = if let Some(host) = req.headers().get("Host") {
         host.to_str().map(|h| {
@@ -98,7 +100,7 @@ async fn handle_req(mut req: Request<Body>, state: Arc<Mutex<State>>) -> Result<
             .body(Body::from(format!("The proxy requires a Host header to work.")))
             .unwrap());
     };
-    let uri = if let Some(portforward) = state.lock().await.fetch_address(&request_host, req.uri().path()).await {
+    let uri = if let Some(portforward) = state.lock().await.fetch_address(&request_host, req.uri().path()).await? {
         let request_uri = req.uri();
         format!("http://{}:{}{}", portforward.host, portforward.port, request_uri.path())
     } else {
@@ -109,7 +111,7 @@ async fn handle_req(mut req: Request<Body>, state: Arc<Mutex<State>>) -> Result<
     };
     println!("Handling request for {}, forwarding to {}", &request_host, &uri);
     *req.uri_mut() = Uri::from_str(uri.as_str()).unwrap();
-    Ok::<_, Infallible>(match client.request(req).await {
+    Ok::<_, _>(match client.request(req).await {
         Ok(value) => value,
         Err(e) => Response::builder()
             .status(StatusCode::BAD_GATEWAY)
