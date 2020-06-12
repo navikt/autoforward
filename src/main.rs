@@ -51,7 +51,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         TcpListener::bind(&"127.0.0.1:8443").await?
     };
     let state = {
-        let state = State::new().await?;
+        let state = State::new(vec!["dev-fss".to_owned(), "prod-fss".to_owned()], vec!["default".to_owned(), "tbd".to_owned()]).await?;
         #[cfg(unix)]
         update_hosts_on_root(&state);
 

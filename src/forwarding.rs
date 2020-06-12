@@ -16,7 +16,10 @@ use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
+use futures_util::stream::FuturesOrdered;
+
 use super::kubernetes::{ApplicationResource, KubernetesResponse};
+use futures_util::{FutureExt, StreamExt};
 
 #[derive(Debug)]
 pub struct ForwardError {
@@ -57,6 +60,8 @@ struct ApplicationDescriptor {
     application_name: String,
     ingresses: Vec<String>,
     liveness: Option<String>,
+    context: String,
+    namespace: String,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -84,7 +89,10 @@ impl PortforwardDescriptor {
         let regex = Regex::new(r"Forwarding from (.+):(\d{2,5}) -> \d{2,5}").unwrap();
 
         let mut cmd = Command::new("kubectl")
-            .args(&["port-forward", "--context", "dev-fss", format!("svc/{}", application.application_name.as_str()).as_str(), ":80"])
+            .args(&["port-forward",
+                "--context", application.context.as_str(),
+                "--namespace", application.namespace.as_str(),
+                format!("svc/{}", application.application_name.as_str()).as_str(), ":80"])
             .stdout(Stdio::piped())
             .spawn()
             .unwrap();
@@ -186,17 +194,16 @@ pub struct State {
     port_forwards: Vec<PortforwardDescriptor>,
 }
 
-impl From<ApplicationResource> for ApplicationDescriptor {
-    fn from(resource: ApplicationResource) -> ApplicationDescriptor {
+impl ApplicationDescriptor {
+    fn create(resource: ApplicationResource, context: String, namespace: String) -> Self {
         ApplicationDescriptor {
             application_name: resource.metadata.name,
             ingresses: resource.spec.ingresses.unwrap().clone(),
             liveness: resource.spec.liveness.map(|v| v.path),
+            context,
+            namespace,
         }
     }
-}
-
-impl ApplicationDescriptor {
     fn best_ingress(&self, host: &str, path: &str) -> Option<String> {
         (&self.ingresses).into_iter()
             .map(|pf| (Uri::from_str(pf.as_str()), pf))
@@ -217,9 +224,26 @@ impl State {
         SystemTime::now() + Duration::from_secs(120)
     }
 
-    pub async fn new() -> Result<State, ForwardError> {
+    pub async fn new(contexts: Vec<String>, namespaces: Vec<String>) -> Result<State, ForwardError> {
+        let descriptors = contexts.into_iter()
+            .flat_map(|context| (&namespaces).into_iter().map(move |namespace| (context.clone(), namespace.clone())))
+            .map(|(context, namespace)| Self::fetch_descriptors(context.clone(), namespace.clone()))
+            .collect::<FuturesOrdered<_>>()
+            .collect::<Vec<_>>().await
+            .into_iter()
+            .flatten()
+            .flatten()
+            .collect::<Vec<_>>();
+        Ok(State {
+            next_update: State::next_update(),
+            hosts: descriptors,
+            port_forwards: vec![],
+        })
+    }
+
+    async fn fetch_descriptors(context: String, namespace: String) -> Result<Vec<ApplicationDescriptor>, ForwardError> {
         let cmd = Command::new("kubectl")
-            .args(&["--context", "dev-fss", "get", "application", "-o", "json"])
+            .args(&["--context", context.as_str(), "--namespace", namespace.as_str(), "get", "application", "-o", "json"])
             .output()
             .await
             .context("Failed to execute kubectl get application")?;
@@ -227,21 +251,16 @@ impl State {
             let input = String::from_utf8(cmd.stderr).unwrap();
             return Err(ForwardError {
                 message: "Failed to execute kubectl get application, got invalid exit code. Is navtunnel running?",
-                original: io::Error::new(io::ErrorKind::Other, input)
-            })
+                original: io::Error::new(io::ErrorKind::Other, input),
+            });
         }
         let resource = serde_json::from_slice::<KubernetesResponse>(&cmd.stdout)
             .unwrap();
-        let descriptors: Vec<ApplicationDescriptor> = resource.items
+        Ok(resource.items
             .into_iter()
             .filter(|application| application.spec.ingresses.is_some())
-            .map(|application| application.into())
-            .collect();
-        Ok(State {
-            next_update: State::next_update(),
-            hosts: descriptors,
-            port_forwards: vec![],
-        })
+            .map(|application| ApplicationDescriptor::create(application, context.clone(), namespace.clone()))
+            .collect())
     }
 
     pub fn hostnames(&self) -> Vec<String> {
