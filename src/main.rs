@@ -51,6 +51,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     } else {
         TcpListener::bind(&"127.0.0.1:8443").await?
     };
+    #[cfg(not(unix))]
+    let mut tcp = TcpListener::bind(&"127.0.0.1:8443");
     let state = {
         let state = State::new(vec!["dev-fss".to_owned(), "prod-fss".to_owned()], vec!["default".to_owned(), "tbd".to_owned()]).await?;
         #[cfg(unix)]
