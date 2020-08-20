@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime};
 
 use hyper::{Client, Uri};
 use hyper::client::HttpConnector;
+#[cfg(unix)]
 use nix::unistd::Pid;
 use pin_utils::pin_mut;
 use regex::Regex;
