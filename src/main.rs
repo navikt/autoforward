@@ -19,6 +19,7 @@ use std::time::Duration;
 
 use hyper::{Body, Client, Request, Response, Server, StatusCode, Uri};
 use hyper::service::{make_service_fn, service_fn};
+#[cfg(test)]
 use nix::unistd::Uid;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
