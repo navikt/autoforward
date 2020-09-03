@@ -40,7 +40,7 @@ impl Error for ForwardError {
     }
 }
 
-trait ToForwardError<A> {
+pub trait ToForwardError<A> {
     fn context(self, context: &'static str) -> Result<A, ForwardError>;
 }
 

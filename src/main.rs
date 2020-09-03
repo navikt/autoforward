@@ -25,7 +25,7 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
 use forwarding::State;
-use crate::forwarding::ForwardError;
+use crate::forwarding::{ForwardError, ToForwardError};
 
 mod kubernetes;
 mod tls;
@@ -46,17 +46,21 @@ fn update_hosts_on_root(state: &State) {
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     #[cfg(unix)]
-        let mut tcp = if nix::unistd::getuid().is_root() {
+    let mut tcp = if nix::unistd::getuid().is_root() {
         TcpListener::bind(&"127.0.0.1:443").await?
     } else {
         TcpListener::bind(&"127.0.0.1:8443").await?
     };
     #[cfg(not(unix))]
-    let mut tcp = TcpListener::bind(&"127.0.0.1:8443").await?;
+    let mut tcp = TcpListener::bind(&"127.0.0.1:443")
+        .await
+        .context("Autoforward needs to be run as administrator on Windows to bind on port 443 and update hosts file")?;
     let state = {
         let state = State::new(vec!["dev-fss".to_owned(), "prod-fss".to_owned()], vec!["default".to_owned(), "tbd".to_owned()]).await?;
         #[cfg(unix)]
         update_hosts_on_root(&state);
+        #[cfg(not(unix))]
+        hosts::update_hosts_file(hosts::hosts_file(), &state.hostnames());
 
         Arc::new(Mutex::new(state))
     };
