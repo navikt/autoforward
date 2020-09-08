@@ -1,8 +1,14 @@
 [package]
 name = "autoforward"
 version = "0.1.0"
-authors = ["Kevin Sillerud <kevin.sillerud@gmail.com>"]
+authors = [
+	"Kevin Sillerud <kevin.sillerud@gmail.com>",
+	"Christian C <christian.chavez [at] nav.no>",
+]
 edition = "2018"
+about = """
+<Description of tool>
+"""
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,6 +24,7 @@ rustls = "0.17"
 futures-util = "0.3"
 pin-utils = "0.1.0-alpha.4"
 failure = "0.1"
+structopt = "0.3.17"
 
 [dev-dependencies]
 tempfile = "3.1"
