@@ -1,8 +1,8 @@
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str;
-use std::io::{Write, Read};
-use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::fs::OpenOptions;
 
 const HEADER: &'static [u8] = b"### START AUTOFORWARD";
 const FOOTER: &'static [u8] = b"### END AUTOFORWARD";
