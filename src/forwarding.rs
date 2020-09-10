@@ -133,7 +133,7 @@ impl PortforwardDescriptor {
         return self.ttl > SystemTime::now();
     }
 
-    async fn close(mut self) {
+    async fn close(self) {
         println!("Closing port-forward for {:?}", self.hosts);
 
         PortforwardDescriptor::kill(self.port_forward_command).await;
@@ -141,7 +141,7 @@ impl PortforwardDescriptor {
     }
 
     #[cfg(unix)]
-    async fn kill(mut process: Child) {
+    async fn kill(process: Child) {
         let process_id = process.id();
         let output = process.wait_with_output();
         pin_mut!(output);
