@@ -220,11 +220,15 @@ impl ApplicationDescriptor {
 }
 
 impl State {
-    fn next_update() -> SystemTime {
-        SystemTime::now() + Duration::from_secs(120)
+    fn next_update(update_frequency: Option<u64>) -> SystemTime {
+        let seconds_duration = match update_frequency {
+            Some(seconds) => seconds,
+            _ => 120,
+        };
+        SystemTime::now() + Duration::from_secs(seconds_duration)
     }
 
-    pub async fn new(contexts: Vec<String>, namespaces: Vec<String>) -> Result<State, ForwardError> {
+    pub async fn new(contexts: Vec<String>, namespaces: Vec<String>, update_frequency: u64) -> Result<State, ForwardError> {
         let descriptors = contexts.into_iter()
             .flat_map(|context| (&namespaces).into_iter().map(move |namespace| (context.clone(), namespace.clone())))
             .map(|(context, namespace)| Self::fetch_descriptors(context.clone(), namespace.clone()))
@@ -235,7 +239,7 @@ impl State {
             .flatten()
             .collect::<Vec<_>>();
         Ok(State {
-            next_update: State::next_update(),
+            next_update: State::next_update(Some(update_frequency)),
             hosts: descriptors,
             port_forwards: vec![],
         })
@@ -280,7 +284,7 @@ impl State {
 
     pub async fn tick(&mut self) {
         if self.next_update < SystemTime::now() {
-            self.next_update = State::next_update();
+            self.next_update = State::next_update(None);
         }
         let mut new_portforwards = Vec::with_capacity(self.port_forwards.len());
         while !self.port_forwards.is_empty() {

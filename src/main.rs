@@ -60,7 +60,11 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .await
         .context("Autoforward needs to be run as administrator on Windows to bind on port 443 and update hosts file")?;
     let state = {
-        let state = State::new(vec!["dev-fss".to_owned(), "prod-fss".to_owned()], vec!["default".to_owned(), "tbd".to_owned()]).await?;
+        let state = State::new(
+            vec!["dev-fss".to_owned(), "prod-fss".to_owned()],
+            vec!["default".to_owned(), "tbd".to_owned()],
+            args.update_frequency.to_owned(),
+        ).await?;
         #[cfg(unix)]
         update_hosts_on_root(&state);
         #[cfg(not(unix))]
