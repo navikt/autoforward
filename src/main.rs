@@ -6,8 +6,6 @@ extern crate pin_utils;
 extern crate regex;
 extern crate rustls;
 extern crate serde_json;
-#[cfg(test)]
-extern crate tempfile;
 extern crate tokio;
 extern crate tokio_rustls;
 

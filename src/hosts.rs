@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn update_hosts_does_not_replace() {
         let hosts = vec!["reddit.com".to_owned()];
-        let mut target_hosts = tempfile::NamedTempFile::new().unwrap();
+        let target_hosts = tempfile::NamedTempFile::new().unwrap();
         std::fs::copy(Path::new("testdata/hosts"), &target_hosts.path()).unwrap();
         update_hosts_file(&target_hosts.path(), &hosts).unwrap();
         let original = std::fs::read_to_string(&target_hosts).unwrap();
