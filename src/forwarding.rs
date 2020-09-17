@@ -3,7 +3,6 @@ use std::fmt;
 use std::io;
 use std::process::Stdio;
 use std::str::FromStr;
-use std::task::Poll;
 use std::time::{Duration, SystemTime};
 
 use hyper::{Client, Uri};
@@ -20,7 +19,7 @@ use tokio::time::timeout;
 use futures_util::stream::FuturesOrdered;
 
 use super::kubernetes::{ApplicationResource, KubernetesResponse};
-use futures_util::{FutureExt, StreamExt};
+use futures_util::StreamExt;
 
 #[derive(Debug)]
 pub struct ForwardError {
@@ -134,7 +133,7 @@ impl PortforwardDescriptor {
         return self.ttl > SystemTime::now();
     }
 
-    async fn close(mut self) {
+    async fn close(self) {
         println!("Closing port-forward for {:?}", self.hosts);
 
         PortforwardDescriptor::kill(self.port_forward_command).await;
@@ -142,7 +141,7 @@ impl PortforwardDescriptor {
     }
 
     #[cfg(unix)]
-    async fn kill(mut process: Child) {
+    async fn kill(process: Child) {
         let process_id = process.id();
         let output = process.wait_with_output();
         pin_mut!(output);
