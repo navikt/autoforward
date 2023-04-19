@@ -23,4 +23,4 @@ failure = "0.1"
 tempfile = "3.1"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.17"
+nix = "0.20"
